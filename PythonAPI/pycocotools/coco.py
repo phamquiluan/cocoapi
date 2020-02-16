@@ -49,6 +49,7 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Polygon
+import cv2
 import numpy as np
 import copy
 import itertools
@@ -61,6 +62,18 @@ if PYTHON_VERSION == 2:
     from urllib import urlretrieve
 elif PYTHON_VERSION == 3:
     from urllib.request import urlretrieve
+
+
+def show(img, name="disp", width=1000):
+    """
+    name: name of window, should be name of img
+    img: source of img, should in type ndarray
+    """
+    cv2.namedWindow(name, cv2.WINDOW_GUI_EXPANDED)
+    cv2.resizeWindow(name, width, 1000)
+    cv2.imshow(name, img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 def _isArrayLike(obj):
@@ -293,6 +306,83 @@ class COCO:
         elif datasetType == 'captions':
             for ann in anns:
                 print(ann['caption'])
+
+    def override_anns(self, image, anns):
+        """
+        __author__ = "luan"
+        Override segmentation mask on image.
+        :param image (array of object): image to override 
+        :param anns (array of object): annotations to override 
+        :return: image with segmentation override
+
+        example code:
+        ===================
+        # get all images containing given categories, select one at random
+        catIds = coco.getCatIds(catNms=['text','title','list','table','figure']);
+        imgIds = coco.getImgIds(catIds=catIds );
+        imgIds = coco.getImgIds(imgIds = [379010])
+        img = coco.loadImgs(imgIds[np.random.randint(0,len(imgIds))])[0]
+
+        # load and display image
+        image_path = "{}/{}/{}".format(dataDir, dataType, img['file_name'])
+        image = cv2.imread(image_path)
+
+        # load anns
+        annIds = coco.getAnnIds(
+            imgIds=img['id'],
+            catIds=catIds,
+            iscrowd=None
+        )
+
+        anns = coco.loadAnns(annIds)
+        vis_image = coco.override_anns(image, anns)
+        show(vis_image)
+        """
+
+        if 'segmentation' in anns[0]:
+            datasetType = 'instances'
+        else:
+            raise Exception('datasetType not supported')
+
+        polygons = []
+        color = []
+        overlay = image.copy()
+        for ann in anns:
+            c = (np.random.random((1, 3)) * 153 + 102).tolist()[0]
+            if 'segmentation' not in ann:
+                raise Exception("This function is use for segmentation task")
+
+            if type(ann['segmentation']) == list: # polygon
+                for seg in ann['segmentation']:
+                    seg = list(map(int, seg))
+                    poly = np.array(seg).reshape((int(len(seg)/2), 2))
+                    cv2.drawContours(overlay, [poly], -1, c, -1)
+                    # apply the overlay
+            else:  # mask 
+                # FIXME untested
+                t = self.imgs[ann['image_id']]
+                if type(ann['segmentation']['counts']) == list:
+                    rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
+                else:
+                    rle = [ann['segmentation']]
+                m = maskUtils.decode(rle)
+                img = np.ones( (m.shape[0], m.shape[1], 3) )
+                if ann['iscrowd'] == 1:
+                    color_mask = np.array([2.0,166.0,101.0])/255
+                if ann['iscrowd'] == 0:
+                    color_mask = np.random.random((1, 3)).tolist()[0]
+                for i in range(3):
+                    img[:,:,i] = color_mask[i]
+                ax.imshow(np.dstack( (img, m*0.5) ))
+        '''
+        p = PatchCollection(polygons, facecolor=color, linewidths=0, alpha=0.4)
+        ax.add_collection(p)
+        p = PatchCollection(polygons, facecolor='none', edgecolors=color, linewidths=2)
+        ax.add_collection(p)
+        '''
+        alpha = 0.5
+        cv2.addWeighted(image, alpha, overlay, 1 - alpha, 0, image)
+        return image
 
     def loadRes(self, resFile):
         """
