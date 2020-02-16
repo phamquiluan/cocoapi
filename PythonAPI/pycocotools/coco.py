@@ -357,6 +357,16 @@ class COCO:
                     seg = list(map(int, seg))
                     poly = np.array(seg).reshape((int(len(seg)/2), 2))
                     cv2.drawContours(overlay, [poly], -1, c, -1)
+
+                    # show the class
+                    class_name = self.dataset['categories'][ann['category_id'] - 1]['name']
+                    cv2.putText(
+                        overlay,
+                        class_name,
+                        (min(p[0] for p in poly), min(p[1] for p in poly)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 255), 1
+                    )
                     # apply the overlay
             else:  # mask 
                 # FIXME untested
